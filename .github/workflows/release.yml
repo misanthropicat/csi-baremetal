@@ -17,6 +17,11 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
+
+      - name: Configure Git
+        run: |
+          git config user.name "$GITHUB_ACTOR"
+          git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
       
       - name: Make version
         id: vars
@@ -45,11 +50,6 @@ jobs:
           prerelease: true
           repository: misanthropicat/csi-baremetal-operator
           files: /tmp/csi-baremetal-deployment-${{ github.event.inputs.csi_operator_version }}.tgz
-
-      - name: Configure Git
-        run: |
-          git config user.name "$GITHUB_ACTOR"
-          git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
 
       - name: Install Helm
         uses: azure/setup-helm@v1
