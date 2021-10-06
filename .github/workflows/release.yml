@@ -49,6 +49,7 @@ jobs:
           tag_name: ${{ github.event.inputs.release_tag }}
           prerelease: true
           repository: misanthropicat/csi-baremetal-operator
+          target_commitish: ${{ steps.vars.outputs.commit_hash }}
           files: /tmp/csi-baremetal-deployment-${{ github.event.inputs.csi_operator_version }}.tgz
 
       - name: Install Helm
