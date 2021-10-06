@@ -23,7 +23,7 @@ jobs:
         run: |
           PACKAGE_NAME=csi-baremetal-deployment-${{ inputs.csi_operator_version }}.tgz
           DIR=/tmp/csi-baremetal-deployment-${{ steps.version.outputs.version }}
-          cp -r ./chants $DIR
+          cp -r ./charts $DIR
           tar -czvf /tmp/$PACKAGE_NAME $DIR
 
       - name: Update release 
