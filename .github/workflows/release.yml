@@ -9,9 +9,6 @@ on:
       release_tag:
         description: 'Current release tag'
         required: true
-      upload_url:
-        description: 'Release URL for uploading asset'
-        required: true
 
 jobs:
   build:
