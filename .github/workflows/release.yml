@@ -47,7 +47,7 @@ jobs:
         run: |
           TAG_NAME=${{ github.event.inputs.release_tag }}
           # remove tag if it exists. Only for test purpose
-          git push origin :$1
+          git push origin :${{ github.event.inputs.release_tag }}
           git tag -a $TAG_NAME ${{ github.sha }} -m "release $TAG_NAME"
           git push origin $TAG_NAME
       
