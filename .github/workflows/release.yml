@@ -29,21 +29,25 @@ jobs:
           echo "::set-output name=version::$(make version)"
 
       - name: Create asset
+        id: asset
         run: |
           PACKAGE_NAME=csi-baremetal-deployment-${{ github.event.inputs.csi_operator_version }}.tgz
           DIR=./csi-baremetal-deployment-${{ steps.vars.outputs.version }}
           cp -r ./charts $DIR
           tar -czvf ./$PACKAGE_NAME $DIR
+          echo "::set-output name=archive_name::$PACKAGE_NAME"
 
       - name: Upload asset
         uses: actions/upload-artifact@v2
         with:
-          name: csi-baremetal-deployment-${{ github.event.inputs.csi_operator_version }}.tgz
+          name: ${{ steps.asset.outputs.archive_name }}
           path: ./csi-baremetal-deployment-${{ github.event.inputs.csi_operator_version }}.tgz
 
       - name: Tag release
         run: |
           TAG_NAME=${{ github.event.inputs.release_tag }}
+          # remove tag if it exists. Only for test purpose
+          git push origin :$1
           git tag -a $TAG_NAME ${{ github.sha }} -m "release $TAG_NAME"
           git push origin $TAG_NAME
       
