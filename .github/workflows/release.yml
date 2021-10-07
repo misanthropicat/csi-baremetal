@@ -62,4 +62,4 @@ jobs:
           tag_name: ${{ github.event.inputs.release_tag }}
           prerelease: true
           repository: misanthropicat/csi-baremetal-operator
-          files: csi-baremetal-deployment-${{ github.event.inputs.csi_operator_version }}.tgz
+          files: /home/runner/work/csi-baremetal/csi-baremetal/csi-baremetal-deployment-${{ github.event.inputs.csi_operator_version }}.tgz
