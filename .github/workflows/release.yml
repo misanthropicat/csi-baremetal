@@ -54,6 +54,7 @@ jobs:
         uses: actions/download-artifact@v2
         with:
           name: csi-baremetal-deployment-${{ github.event.inputs.csi_operator_version }}.tgz
+          path: /tmp
 
       - name: Update release 
         uses: softprops/action-gh-release@v1
@@ -62,4 +63,4 @@ jobs:
           tag_name: ${{ github.event.inputs.release_tag }}
           prerelease: true
           repository: misanthropicat/csi-baremetal-operator
-          files: /home/runner/work/csi-baremetal/csi-baremetal/csi-baremetal-deployment-${{ github.event.inputs.csi_operator_version }}.tgz
+          files: /tmp/csi-baremetal-deployment-${{ github.event.inputs.csi_operator_version }}.tgz
