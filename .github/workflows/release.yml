@@ -29,11 +29,10 @@ jobs:
           echo "::set-output name=version::$(make version)"
 
       - name: Create asset
-        run: |
-          PACKAGE_NAME=csi-baremetal-deployment-${{ github.event.inputs.csi_operator_version }}.tgz
-          DIR=/tmp/csi-baremetal-deployment-${{ steps.vars.outputs.version }}
-          cp -r ./charts $DIR
-          tar -czvf /tmp/$PACKAGE_NAME $DIR
+        uses: actions/upload-artifact@v2
+        with:
+          name: csi-baremetal-deployment-${{ github.event.inputs.csi_operator_version }}.tgz
+          path: ./charts
 
       - name: Tag release
         run: |
