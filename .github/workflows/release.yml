@@ -56,6 +56,9 @@ jobs:
           name: csi-baremetal-deployment-${{ github.event.inputs.csi_operator_version }}.tgz
           path: /tmp/csi-baremetal-deployment-${{ github.event.inputs.csi_operator_version }}.tgz
 
+      - name: Show /tmp content
+        run: ls -R /tmp | grep csi
+
       - name: Update release 
         uses: softprops/action-gh-release@v1
         with:
