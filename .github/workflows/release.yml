@@ -65,5 +65,6 @@ jobs:
           token: ${{ secrets.CSI_WF_TOKEN }}
           tag_name: ${{ github.event.inputs.release_tag }}
           prerelease: true
+          draft: false
           repository: dell/csi-baremetal-operator
           files: ./csi-baremetal-deployment-${{ github.event.inputs.csi_operator_version }}.tgz
