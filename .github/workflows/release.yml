@@ -50,10 +50,12 @@ jobs:
         env:
           CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"          
 
-      - uses: actions/download-artifact@v2
+      - name: Download asset
+        uses: actions/download-artifact@v2
         with:
           name: csi-baremetal-deployment-${{ github.event.inputs.csi_operator_version }}.tgz
           path: .
+        run: ls -R
 
       - name: Update release 
         uses: softprops/action-gh-release@v1
@@ -62,5 +64,4 @@ jobs:
           tag_name: ${{ github.event.inputs.release_tag }}
           prerelease: true
           repository: misanthropicat/csi-baremetal-operator
-          files: csi-baremetal-deployment-${{ github.event.inputs.csi_operator_version }}.tgz
-  
+          files: ./csi-baremetal-deployment-${{ github.event.inputs.csi_operator_version }}.tgz
