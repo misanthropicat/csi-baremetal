@@ -57,12 +57,6 @@ jobs:
         env:
           CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"          
 
-      - name: Download asset
-        uses: actions/download-artifact@v2
-        with:
-          name: csi-baremetal-deployment-${{ github.event.inputs.csi_operator_version }}.tgz
-          path: ./csi-baremetal-deployment-${{ github.event.inputs.csi_operator_version }}.tgz
-
       - name: Update release 
         uses: softprops/action-gh-release@v1
         with:
