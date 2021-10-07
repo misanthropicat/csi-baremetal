@@ -29,10 +29,13 @@ jobs:
           echo "::set-output name=version::$(make version)"
 
       - name: Create asset
+        run: tar -czvf csi-baremetal-deployment-${{ github.event.inputs.csi_operator_version }}.tgz
+
+      - name: Upload asset
         uses: actions/upload-artifact@v2
         with:
           name: csi-baremetal-deployment-${{ github.event.inputs.csi_operator_version }}.tgz
-          path: ./charts
+          path: ./csi-baremetal-deployment-${{ github.event.inputs.csi_operator_version }}.tgz
 
       - name: Tag release
         run: |
@@ -54,10 +57,7 @@ jobs:
         uses: actions/download-artifact@v2
         with:
           name: csi-baremetal-deployment-${{ github.event.inputs.csi_operator_version }}.tgz
-          path: /tmp/csi-baremetal-deployment-${{ github.event.inputs.csi_operator_version }}.tgz
-
-      - name: Show /tmp content
-        run: ls -R /tmp | grep csi
+          path: ./csi-baremetal-deployment-${{ github.event.inputs.csi_operator_version }}.tgz
 
       - name: Update release 
         uses: softprops/action-gh-release@v1
@@ -65,5 +65,5 @@ jobs:
           token: ${{ secrets.CSI_WF_TOKEN }}
           tag_name: ${{ github.event.inputs.release_tag }}
           prerelease: true
-          repository: misanthropicat/csi-baremetal-operator
-          files: /tmp/csi-baremetal-deployment-${{ github.event.inputs.csi_operator_version }}.tgz
+          repository: dell/csi-baremetal-operator
+          files: ./csi-baremetal-deployment-${{ github.event.inputs.csi_operator_version }}.tgz
