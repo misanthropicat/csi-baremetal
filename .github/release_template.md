@@ -1,11 +1,11 @@
 ---
-title: Template for release issues creation
-date: 2021-10-08
+name: Release issue
+about: Used by release workflows
 ---
 
 ## Issue title
 
-{{ tools.context.workflow }} {{ tools.context.ref }}
+Release <release_tag>
 
 ## Issue statement
 
