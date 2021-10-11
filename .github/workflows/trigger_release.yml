@@ -1,0 +1,31 @@
+name: Trigger release process
+
+on:
+  push:
+    tags:
+      - v*
+    branches:
+      - master
+      - release*
+
+jobs:
+  create_release_issue:
+    name: Create issue
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create issue
+        id: create_issue
+        uses: JasonEtco/create-an-issue@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.CSI_WF_TOKEN }}
+        with:
+          filename: .github/release_template.md
+          assignees: misanthropicat
+
+      - name: Trigger release workflow in csi-baremetal-operator repo
+        uses: benc-uk/workflow-dispatch@v1
+        with:
+          workflow: Release Charts
+          repo: misanthropicat/csi-baremetal-operator
+          token: ${{ secrets.CSI_WF_TOKEN }}
+          inputs: '{ "issue_number": ${{ steps.create_issue.outputs.number }} }'
