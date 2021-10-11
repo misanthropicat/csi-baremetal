@@ -58,4 +58,5 @@ jobs:
           workflow: Release Charts
           repo: misanthropicat/csi-baremetal-operator
           token: ${{ secrets.CSI_WF_TOKEN }}
-          inputs: '{ "issue_number": ${{ steps.create_issue.outputs.number }} }'
+          inputs: '{ "issue_number": "${{ steps.create_issue.outputs.number }}" }'
+        if: startsWith(github.ref, 'refs/tags/')
