@@ -1,11 +1,12 @@
 ---
-name: Release issue
+title: Release {{ event }}
+name: Release {{ issue }}
 about: Used by release workflows
 ---
 
 ## Issue title
 
-Release <release_tag>
+Release {{ payload }}
 
 ## Issue statement
 
