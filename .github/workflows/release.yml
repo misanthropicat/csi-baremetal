@@ -41,7 +41,7 @@ jobs:
         uses: actions/upload-artifact@v2
         with:
           name: ${{ steps.asset.outputs.archive_name }}
-          path: ./csi-baremetal-deployment-${{ github.event.inputs.csi_operator_version }}.tgz
+          path: ./${{ steps.asset.outputs.archive_name }}
 
       - name: Tag release
         run: |
@@ -67,4 +67,4 @@ jobs:
           prerelease: true
           draft: false
           repository: dell/csi-baremetal-operator
-          files: ./csi-baremetal-deployment-${{ github.event.inputs.csi_operator_version }}.tgz
+          files: ./${{ steps.asset.outputs.archive_name }}
