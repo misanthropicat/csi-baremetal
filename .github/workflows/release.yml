@@ -35,6 +35,11 @@ jobs:
           echo "::set-output name=release_tag::${GITHUB_REF/refs\/tags\//}"
           echo "::set-output name=sha::${GITHUB_SHA::7}"
       
+      - name: Tag release
+        run: |
+          TAG_NAME=${{ steps.vars.outputs.release_tag }}
+          git tag -a $TAG_NAME ${{ steps.vars.outputs.sha }} -m "release $TAG_NAME"
+
       - name: Install Helm
         uses: azure/setup-helm@v1
         with:
