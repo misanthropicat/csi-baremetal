@@ -1,14 +1,9 @@
 name: Release Charts
 
-on: 
-  workflow_dispatch:
-    inputs:
-      csi_operator_version:
-        description: 'Last released CSI Operator version'
-        required: true
-      release_tag:
-        description: 'Current release tag'
-        required: true
+on:
+  release:
+    types:
+      - created
 
 jobs:
   build:
@@ -17,6 +12,16 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
+
+      # - name: Create issue
+      #   id: create_issue
+      #   uses: JasonEtco/create-an-issue@v2
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.CSI_WF_TOKEN }}
+      #   with:
+      #     filename: .github/release_template.md
+      #     assignees: misanthropicat
+      #   if: startsWith(github.ref, 'refs/tags/')
 
       - name: Configure Git
         run: |
@@ -27,18 +32,7 @@ jobs:
         id: vars
         run: |
           echo "::set-output name=version::$(make version)"
-
-      - name: Create asset
-        uses: actions/upload-artifact@v2
-        with:
-          name: csi-baremetal-deployment-${{ github.event.inputs.csi_operator_version }}.tgz
-          path: ./charts
-
-      - name: Tag release
-        run: |
-          TAG_NAME=${{ github.event.inputs.release_tag }}
-          git tag -a $TAG_NAME ${{ github.sha }} -m "release $TAG_NAME"
-          git push origin $TAG_NAME
+          echo "::set-output name=release_tag::${GITHUB_REF/refs\/tags\//}"
       
       - name: Install Helm
         uses: azure/setup-helm@v1
@@ -50,17 +44,14 @@ jobs:
         env:
           CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"          
 
-      - uses: actions/download-artifact@v2
+      - name: Trigger release workflow in csi-baremetal-operator repo
+        uses: benc-uk/workflow-dispatch@v1
         with:
-          name: csi-baremetal-deployment-${{ github.event.inputs.csi_operator_version }}.tgz
-          path: .
-
-      - name: Update release 
-        uses: softprops/action-gh-release@v1
-        with:
+          workflow: Release Charts
+          repo: misanthropicat/csi-baremetal-operator
           token: ${{ secrets.CSI_WF_TOKEN }}
-          tag_name: ${{ github.event.inputs.release_tag }}
-          prerelease: true
-          repository: misanthropicat/csi-baremetal-operator
-          files: csi-baremetal-deployment-${{ github.event.inputs.csi_operator_version }}.tgz
-  
+          inputs: |
+            { "issue_number": 567,
+              "csi_version": "${{ steps.vars.outputs.version }}",
+              "release_tag": "${{ steps.vars.outputs.release_tag }}" }
+        if: startsWith(github.ref, 'refs/tags/')
