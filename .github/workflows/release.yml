@@ -33,6 +33,7 @@ jobs:
         run: |
           echo "::set-output name=version::$(make version)"
           echo "::set-output name=release_tag::${GITHUB_REF/refs\/tags\//}"
+          echo "::set-output name=sha::${GITHUB_SHA::7}"
       
       - name: Install Helm
         uses: azure/setup-helm@v1
@@ -50,6 +51,7 @@ jobs:
           workflow: Release Charts
           repo: misanthropicat/csi-baremetal-operator
           token: ${{ secrets.CSI_WF_TOKEN }}
+          ref: ${{ steps.vars.outputs.sha }}
           inputs: |
             { "issue_number": "567",
               "csi_version": "${{ steps.vars.outputs.version }}",
