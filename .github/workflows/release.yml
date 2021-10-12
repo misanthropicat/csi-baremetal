@@ -51,7 +51,7 @@ jobs:
           repo: misanthropicat/csi-baremetal-operator
           token: ${{ secrets.CSI_WF_TOKEN }}
           inputs: |
-            { "issue_number": 567,
+            { "issue_number": "567",
               "csi_version": "${{ steps.vars.outputs.version }}",
               "release_tag": "${{ steps.vars.outputs.release_tag }}" }
         if: startsWith(github.ref, 'refs/tags/')
