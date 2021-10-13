@@ -28,17 +28,21 @@ jobs:
           git config user.name "$GITHUB_ACTOR"
           git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
       
-      - name: Make version
+      - name: Set variables
         id: vars
         run: |
           echo "::set-output name=version::$(make version)"
           echo "::set-output name=release_tag::${GITHUB_REF/refs\/tags\//}"
           echo "::set-output name=sha::${GITHUB_SHA::7}"
-      
-      - name: Tag release
+          echo "::set-output name=issue_number::567"
+          echo "::set-output name=current_branch::${GITHUB_REF#refs/heads/}"
+
+      - name: Retag release with annotation
         run: |
           TAG_NAME=${{ steps.vars.outputs.release_tag }}
-          git tag -a $TAG_NAME ${{ steps.vars.outputs.sha }} -m "release $TAG_NAME"
+          git push origin :$TAG_NAME
+          git tag -a -f $TAG_NAME ${{ steps.vars.outputs.sha }} -m "release $TAG_NAME: issue ${{ steps.vars.outputs.issue_number }}"
+          git push origin $TAG_NAME
 
       - name: Install Helm
         uses: azure/setup-helm@v1
@@ -56,9 +60,9 @@ jobs:
           workflow: Release Charts
           repo: misanthropicat/csi-baremetal-operator
           token: ${{ secrets.CSI_WF_TOKEN }}
-          ref: ${{ steps.vars.outputs.sha }}
+          ref: ${{ steps.vars.outputs.current_branch }}
           inputs: |
-            { "issue_number": "567",
+            { "issue_number": "${{ steps.vars.outputs.issue_number }}",
               "csi_version": "${{ steps.vars.outputs.version }}",
               "release_tag": "${{ steps.vars.outputs.release_tag }}" }
         if: startsWith(github.ref, 'refs/tags/')
