@@ -35,7 +35,7 @@ jobs:
           echo "::set-output name=release_tag::${GITHUB_REF/refs\/tags\//}"
           echo "::set-output name=sha::${GITHUB_SHA::7}"
           echo "::set-output name=issue_number::567"
-          echo "::set-output name=current_branch::${GITHUB_REF#refs/heads/}"
+          echo "::set-output name=target_branch::${{ github.event.release.target_commitish }}"
 
       - name: Retag release with annotation
         run: |
@@ -43,6 +43,7 @@ jobs:
           git push origin :$TAG_NAME
           git tag -a -f $TAG_NAME ${{ steps.vars.outputs.sha }} -m "release $TAG_NAME: issue ${{ steps.vars.outputs.issue_number }}"
           git push origin $TAG_NAME
+          echo "${{ steps.vars.outputs.target_branch }}"
 
       - name: Install Helm
         uses: azure/setup-helm@v1
@@ -60,7 +61,7 @@ jobs:
           workflow: Release Charts
           repo: misanthropicat/csi-baremetal-operator
           token: ${{ secrets.CSI_WF_TOKEN }}
-          ref: ${{ steps.vars.outputs.current_branch }}
+          ref: ${{ steps.vars.outputs.target_branch }}
           inputs: |
             { "issue_number": "${{ steps.vars.outputs.issue_number }}",
               "csi_version": "${{ steps.vars.outputs.version }}",
