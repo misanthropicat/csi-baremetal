@@ -28,13 +28,14 @@ jobs:
           git config user.name "$GITHUB_ACTOR"
           git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
       
-      - name: Make version
+      - name: Set variables
         id: vars
         run: |
           echo "::set-output name=version::$(make version)"
           echo "::set-output name=release_tag::${GITHUB_REF/refs\/tags\//}"
           echo "::set-output name=sha::${GITHUB_SHA::7}"
           echo "::set-output name=issue_number::567"
+          echo "::set-output name=current_branch::${GITHUB_REF#refs/heads/}"
 
       - name: Retag release with annotation
         run: |
@@ -59,7 +60,7 @@ jobs:
           workflow: Release Charts
           repo: misanthropicat/csi-baremetal-operator
           token: ${{ secrets.CSI_WF_TOKEN }}
-          ref: ${{ github.event.pull_request.head.ref }}
+          ref: ${{ steps.vars.outputs.current_branch }}
           inputs: |
             { "issue_number": "${{ steps.vars.outputs.issue_number }}",
               "csi_version": "${{ steps.vars.outputs.version }}",
