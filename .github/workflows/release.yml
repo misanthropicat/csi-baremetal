@@ -1,27 +1,25 @@
 name: Release Charts
 
 on:
-  release:
-    types:
-      - created
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: 'Issue for release creation number'
+        required: true
+      csi_version:
+        description: 'csi-baremetal-deployment release version'
+        required: true
+      release_tag:
+        description: 'Release tag'
+        required: true
 
 jobs:
-  build:
-    name: Release
+  create_release:
+    name: Create pre-release
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
-
-      # - name: Create issue
-      #   id: create_issue
-      #   uses: JasonEtco/create-an-issue@v2
-      #   env:
-      #     GITHUB_TOKEN: ${{ secrets.CSI_WF_TOKEN }}
-      #   with:
-      #     filename: .github/release_template.md
-      #     assignees: misanthropicat
-      #   if: startsWith(github.ref, 'refs/tags/')
 
       - name: Configure Git
         run: |
@@ -32,18 +30,125 @@ jobs:
         id: vars
         run: |
           echo "::set-output name=version::$(make version)"
-          echo "::set-output name=release_tag::${GITHUB_REF/refs\/tags\//}"
+          echo "::set-output name=release_path::/tmp/${{ github.event.inputs.release_tag }}"
           echo "::set-output name=sha::${GITHUB_SHA::7}"
-          echo "::set-output name=issue_number::567"
-          echo "::set-output name=target_branch::${{ github.event.release.target_commitish }}"
+          echo "::set-output name=release_branch::feature-issue-${{ github.event.inputs.issue_number }}-release-${{ github.event.inputs.release_tag }}"
+          echo "::set-output name=current_branch::${GITHUB_REF#refs/heads/}"
 
-      # - name: Retag release with annotation
-      #   run: |
-      #     TAG_NAME=${{ steps.vars.outputs.release_tag }}
-      #     git push origin :$TAG_NAME
-      #     git tag -a -f $TAG_NAME ${{ steps.vars.outputs.sha }} -m "release $TAG_NAME: issue ${{ steps.vars.outputs.issue_number }}"
-      #     git push origin $TAG_NAME
-      #     echo "${{ steps.vars.outputs.target_branch }}"
+      - name: Install python3
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.10.0'
+
+      - name: Install dependencies for YAML secure parsing
+        run: |
+          sudo apt install jq
+          python -m pip install --upgrade pip
+          pip install yq
+
+      - name: Update csi-baremetal-operator image tag in values
+        uses: mikefarah/yq@master
+        with:
+            cmd: yq eval -i '.image.tag="${{ steps.vars.outputs.version }}"' ./charts/csi-baremetal-operator/values.yaml
+
+      - name: Update csi-baremetal-deployment image tag in values
+        uses: mikefarah/yq@master
+        with:
+            cmd: yq eval -i '.image.tag="${{ github.event.inputs.csi_version }}"' ./charts/csi-baremetal-deployment/values.yaml
+
+      - name: Commit and push changes
+        id: commit
+        uses: stefanzweifel/git-auto-commit-action@v4
+        with:
+          commit_message: "[issue#${{ github.event.inputs.issue_number }}] Set image tags values"
+          commit_options: --amend --signoff
+          push_options: --force-with-lease
+          tagging_message: ${{ github.event.inputs.release_tag }}
+          file_pattern: charts/csi-baremetal-operator/values.yaml charts/csi-baremetal-deployment/values.yaml
+          branch: ${{ steps.vars.outputs.current_branch }}
+
+      - name: Tag release with annotation
+        run: |
+          TAG_NAME=${{ github.event.inputs.release_tag }}
+          git tag -d $TAG_NAME
+          git push origin :$TAG_NAME
+          git tag -a -f $TAG_NAME ${{ steps.commit.outputs.commit_hash }} -m "release $TAG_NAME: issue ${{ github.event.inputs.issue_number }}"
+          git push origin $TAG_NAME
+
+      - name: Create csi-baremetal-operator asset
+        id: asset_1
+        run: |
+          helm package charts/csi-baremetal-operator/ --version ${{ steps.vars.outputs.version }} --app-version ${{ github.event.inputs.release_tag }} --dependency-update
+          echo "::set-output name=archive_name::csi-baremetal-operator-${{ steps.vars.outputs.version }}.tgz"
+
+      - name: Upload csi-baremetal-operator asset
+        uses: actions/upload-artifact@v2
+        with:
+          name: ${{ steps.asset_1.outputs.archive_name }}
+          path: ./${{ steps.asset_1.outputs.archive_name }}
+
+      - name: Create csi-baremetal-deployment asset
+        id: asset_2
+        run: |
+          helm package charts/csi-baremetal-deployment/ --version ${{ steps.vars.outputs.version }} --app-version ${{ github.event.inputs.release_tag }} --dependency-update
+          echo "::set-output name=archive_name::csi-baremetal-deployment-${{ steps.vars.outputs.version }}.tgz"
+
+      - name: Upload csi-baremetal-deployment asset
+        uses: actions/upload-artifact@v2
+        with:
+          name: ${{ steps.asset_2.outputs.archive_name }}
+          path: ./${{ steps.asset_2.outputs.archive_name }}      
+
+      - name: Create release
+        uses: softprops/action-gh-release@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag_name: ${{ github.event.inputs.release_tag }}
+          name: Release ${{ github.event.inputs.release_tag }}
+          draft: false
+          prerelease: true
+          files: |
+            ./${{ steps.asset_1.outputs.archive_name }}
+            ./${{ steps.asset_2.outputs.archive_name }}
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v2
+        with:
+          path: ${{ steps.vars.outputs.release_path }}
+
+      - name: Checkout gh-pages
+        uses: actions/checkout@v2
+        with:
+          ref: gh-pages
+
+      - name: Update index.yaml
+        run: |
+          git pull
+          git checkout -b ${{ steps.vars.outputs.release_branch }}
+          helm repo index ${{ steps.vars.outputs.release_path }} --url ${{ github.server_url }}/${{ github.repository }}/releases/download/${{ github.event.inputs.release_tag }} --merge docs/index.yaml
+          cp ${{ steps.vars.outputs.release_path }}/index.yaml -t ./docs
+      
+      - name: Commit and push changes
+        id: commit_docs
+        uses: stefanzweifel/git-auto-commit-action@v4
+        with:
+          commit_message: "[issue#${{ github.event.inputs.issue_number }}] Update Helm repo index"
+          commit_options: --amend --signoff
+          push_options: --force-with-lease
+          file_pattern: ./docs/index.yaml
+          branch: ${{ steps.vars.outputs.release_branch }}
+
+      - name: Create Pull Request
+        id: pr
+        uses: peter-evans/create-pull-request@v3
+        with:
+          token: ${{ secrets.CSI_WF_TOKEN }}
+          branch: ${{ steps.vars.outputs.release_branch }}
+          base: master
+          title: 'Release ${{ github.event.inputs.release_tag }}'
+          assignees: misanthropicat
+          reviewers: misanthropicat
+          draft: false
 
       - name: Install Helm
         uses: azure/setup-helm@v1
@@ -53,17 +158,41 @@ jobs:
       - name: Update helm repository
         uses: helm/chart-releaser-action@v1.2.1
         env:
-          CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"          
+          CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
 
-      - name: Trigger release workflow in csi-baremetal-operator repo
-        uses: benc-uk/workflow-dispatch@v1
+      - name: Copy assets to csi-baremetal repo
+        uses: andstor/copycat-action@v3
         with:
-          workflow: Release Charts
-          repo: misanthropicat/csi-baremetal-operator
+          personal_token: ${{ secrets.CSI_WF_TOKEN }}
+          src_path: /.
+          dst_path: /.
+          dst_owner: misanthropicat
+          dst_repo_name: csi-baremetal
+          dst_branch: ${{ steps.vars.outputs.release_branch }}
+          src_branch: ${{ steps.vars.outputs.current_branch }}
+          src_wiki: false
+          dst_wiki: false
+          username: ${{ github.actor }}
+          email: ${{ github.actor }}@users.noreply.github.com"
+
+      - name: Update release in csi-baremetal repo with assets
+        uses: softprops/action-gh-release@v1
+        with:
+          repository: misanthropicat/csi-baremetal
           token: ${{ secrets.CSI_WF_TOKEN }}
-          ref: ${{ steps.vars.outputs.target_branch }}
-          inputs: |
-            { "issue_number": "${{ steps.vars.outputs.issue_number }}",
-              "csi_version": "${{ steps.vars.outputs.version }}",
-              "release_tag": "${{ steps.vars.outputs.release_tag }}" }
-        if: startsWith(github.ref, 'refs/tags/')
+          tag_name: ${{ github.event.inputs.release_tag }}
+          name: Release ${{ github.event.inputs.release_tag }}
+          draft: false
+          prerelease: true
+          files: |
+            ./${{ steps.asset_1.outputs.archive_name }}
+            ./${{ steps.asset_2.outputs.archive_name }}
+
+      # - name: Send slack notification
+      #   uses: rtCamp/action-slack-notify@v2
+      #   env:
+      #     SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+      #     SLACK_CHANNEL: test-private-channel
+      #     SLACK_COLOR: ${{ job.status }}
+      #     SLACK_TITLE: 'Release ${{ github.event.inputs.release_tag }} is ready for review'
+      #     SLACK_MESSAGE: 'Please review this PR: ${{ steps.pr.outputs.pull-request-url }}'

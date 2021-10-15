@@ -10,7 +10,7 @@ env:
   golangci_version: '1.37.0'
 jobs:
   lint-test:
-    name: Validate code and charts
+    name: Validate code and build it
     runs-on: ubuntu-18.04
     steps:
     - name: Check out code
@@ -40,7 +40,7 @@ jobs:
           go-build-${{ env.go_version }}-
         
     - name: Get dependencies
-      run:  make dependency
+      run:  go mod download
       
     - name: Install golangci-lint
       run: |
@@ -48,14 +48,16 @@ jobs:
         sudo dpkg -i golangci-lint.deb
         
     - name: Lint code
-      run: GOGC=300 make lint
+      run: GOGC=300 golangci-lint -v run --timeout 3m ./...
       
-    - name: Lint charts
-      run: make lint-charts
-      
-    - name: Run Tests
-      run: CI=false make test
-    
+    - name: Build binary
+      run: |
+        make manager
+
+    - name: Run tests
+      run: |
+        make test
+
     - name: Coverage
       run: make coverage
 
@@ -67,57 +69,8 @@ jobs:
 
     - name: Upload coverage report to codecov
       uses: codecov/codecov-action@v1.0.2
-      continue-on-error: true  # added here as workaround for codecov-action on validation of PR from forked repo
+      continue-on-error: true  #added here to workaround PR's from forked repositories validation failure caused by CODECOV_TOKEN access
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
         file: ./coverage.out
         flags: unittests
-      
-    - name: Build binaries
-      run: |
-        make DRIVE_MANAGER_TYPE=basemgr build
-        make DRIVE_MANAGER_TYPE=loopbackmgr build-drivemgr
-        make DRIVE_MANAGER_TYPE=idracmgr build-drivemgr
-
-    - name: Test sanity
-      run: |
-        make test-sanity
-        
-  gen-files-validate:
-    name: Generated files should be consistent
-    runs-on: ubuntu-18.04
-    steps:
-    - name: Check out code
-      uses: actions/checkout@v2
-
-    - name: Prepare Golang 
-      uses: actions/setup-go@v2
-      with:
-        go-version: ${{ env.go_version }}
-  
-    - name: Compile proto files
-      run: make install-compile-proto
-
-    - name: Generate CRD
-      run: |
-        make install-controller-gen
-        make generate-deepcopy
-
-    - name: Verify Changed files
-      uses: tj-actions/verify-changed-files@v5.5
-      id: changed_files
-      with:
-        files: |
-           api/generated/v1/*.go
-           api/v1/*/*.go
-           '.(go)$'
-           
-    - name: Display changed files
-      if: steps.changed_files.outputs.files_changed == 'true'
-      run: |
-        echo "Changed files: ${{ steps.changed_files.outputs.changed_files }}"
-        
-    - name: Perform action when files change.
-      if: steps.changed_files.outputs.files_changed == 'true'
-      run: |
-        exit 1

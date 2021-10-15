@@ -1,114 +1,106 @@
 include variables.mk
 
-include Makefile.docker
-include Makefile.validation
-# optional include
--include Makefile.addition
+# Image URL to use all building/pushing image targets
+IMG ?= ${REGISTRY}/csi-baremetal-operator:${TAG}
 
-.PHONY: version test build
+# Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
+CRD_OPTIONS ?= "crd:trivialVersions=true"
 
-# print version
+# Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
+ifeq (,$(shell go env GOBIN))
+GOBIN=$(shell go env GOPATH)/bin
+else
+GOBIN=$(shell go env GOBIN)
+endif
+
+# Print version
 version:
 	@printf $(TAG)
 
-dependency:
-	${GO_ENV_VARS} go mod download
+all: manager
 
-all: build base-images images push
+### Unit tests
 
-### Build binaries
-build: \
-build-drivemgr \
-build-node \
-build-controller \
-build-extender \
-build-scheduler \
-build-node-controller
+coverage:
+	go tool cover -html=coverage.out -o coverage.html
 
-build-drivemgr:
-	GOOS=linux go build -o ./build/${DRIVE_MANAGER}/$(DRIVE_MANAGER_TYPE)/$(DRIVE_MANAGER_TYPE) ./cmd/${DRIVE_MANAGER}/$(DRIVE_MANAGER_TYPE)/main.go
+test:
+	${GO_ENV_VARS} go test `go list ./... | grep pkg` -race -cover -coverprofile=coverage.out -covermode=atomic
 
-build-node:
-	CGO_ENABLED=0 GOOS=linux go build -o ./build/${NODE}/${NODE} ${LDFLAGS} ./cmd/${NODE}/main.go
+# Build manager binary
+manager: fmt vet
+	go build -o bin/manager main.go
 
-build-controller:
-	CGO_ENABLED=0 GOOS=linux go build -o ./build/${CONTROLLER}/${CONTROLLER} ${LDFLAGS} ./cmd/${CONTROLLER}/main.go
+# Run against the configured Kubernetes cluster in ~/.kube/config
+run: fmt vet resources
+	go run ./main.go
 
-build-extender:
-	CGO_ENABLED=0 GOOS=linux go build -o ./build/${SCHEDULING_PKG}/${EXTENDER}/${EXTENDER} ./cmd/${SCHEDULING_PKG}/${EXTENDER}/main.go
+# Install CRDs into a cluster
+install:
+	kustomize build config/crd | kubectl apply -f -
 
-build-scheduler:
-	CGO_ENABLED=0 GOOS=linux go build -o ./build/${SCHEDULING_PKG}/${SCHEDULER}/${SCHEDULER} ./cmd/${SCHEDULING_PKG}/${SCHEDULER}/main.go
+# Uninstall CRDs from a cluster
+uninstall: manifests
+	kustomize build config/crd | kubectl delete -f -
 
-build-node-controller:
-	CGO_ENABLED=0 GOOS=linux go build -o ./build/${CR_CONTROLLERS}/${NODE_CONTROLLER}/${CONTROLLER} ./cmd/${NODE_CONTROLLER}/main.go
+# Deploy controller in the configured Kubernetes cluster in ~/.kube/config
+deploy:
+	cd config/manager && kustomize edit set image controller=${IMG}
+	kustomize build config/default | kubectl apply -f -
 
-### Clean artifacts
-clean-all: clean clean-images
+# Deploy CSI resources from ~/deploy
+resources:
+	kubectl apply -f config/crd/bases
+	kubectl apply -f deploy/rbac
+	kubectl apply -f deploy/storageclass
+	kubectl apply -f deploy/configmap
+	kubectl apply -f deploy/csidriver
 
-clean: clean-drivemgr \
-clean-node \
-clean-controller \
-clean-extender \
-clean-scheduler \
-clean-node-controller
+# Generate manifests e.g. CRD, RBAC etc.
+manifests: controller-gen
+	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 
-clean-drivemgr:
-	rm -rf ./build/${DRIVE_MANAGER}/*
+# Run go fmt against code
+fmt:
+	go fmt ./...
 
-clean-node:
-	rm -rf ./build/${NODE}/*
+# Run go vet against code
+vet:
+	go vet ./...
 
-clean-controller:
-	rm -rf ./build/${CONTROLLER}/*
+# Generate code
+generate:
+	controller-gen object paths=api/v1/deployment_types.go paths=api/v1/groupversion_info.go output:dir=api/v1
+	controller-gen crd:trivialVersions=true paths=api/v1/deployment_types.go paths=api/v1/groupversion_info.go output:crd:dir=config/crd
 
-clean-extender:
-	rm -rf ./build/${SCHEDULING_PKG}/${EXTENDER}/*
+# Build the docker image
+docker-build:
+	docker build . -t ${IMG}
 
-clean-scheduler:
-	rm -rf ./build/${SCHEDULING_PKG}/${SCHEDULER}/*
+# Build the docker image
+kind-load:
+	kind load docker-image ${IMG}
 
-clean-node-controller:
-	rm -rf ./build/${CR_CONTROLLERS}/*
+# Push the docker image
+docker-push:
+	docker push ${IMG}
 
-clean-proto:
-	rm -rf ./api/generated/v1/*
+# find or download controller-gen
+# download controller-gen if necessary
+controller-gen:
+ifeq (, $(shell which controller-gen))
+	@{ \
+	set -e ;\
+	CONTROLLER_GEN_TMP_DIR=$$(mktemp -d) ;\
+	cd $$CONTROLLER_GEN_TMP_DIR ;\
+	go mod init tmp ;\
+	go get sigs.k8s.io/controller-tools/cmd/controller-gen@v0.2.5 ;\
+	rm -rf $$CONTROLLER_GEN_TMP_DIR ;\
+	}
+CONTROLLER_GEN=$(GOBIN)/controller-gen
+else
+CONTROLLER_GEN=$(shell which controller-gen)
+endif
 
-### API targets
-install-protoc:
-	mkdir -p proto_3.11.0
-	curl -L -O https://github.com/protocolbuffers/protobuf/releases/download/v3.11.0/protoc-3.11.0-linux-x86_64.zip && \
-	unzip protoc-3.11.0-linux-x86_64.zip -d proto_3.11.0/ && \
-	sudo mv proto_3.11.0/bin/protoc /usr/bin/protoc && \
-	protoc --version; rm -rf proto_3.11.0; rm protoc-*
-	go get -u github.com/golang/protobuf/protoc-gen-go@v1.3.2
-
-install-compile-proto: install-protoc compile-proto
-
-install-controller-gen:
-	# Build controller-gen from go.mod
-	${GO_ENV_VARS} go mod download sigs.k8s.io/controller-tools
-	${GO_ENV_VARS} go build -mod='' -o ./bin/ sigs.k8s.io/controller-tools/cmd/controller-gen
-
-compile-proto:
-	mkdir -p api/generated/v1/
-	protoc -I=api/v1 --go_out=plugins=grpc:api/generated/v1 api/v1/*.proto
-
-generate-deepcopy:
-	# Generate deepcopy functions for CRD
-	$(CONTROLLER_GEN_BIN) object paths=api/v1/volumecrd/volume_types.go paths=api/v1/volumecrd/groupversion_info.go  output:dir=api/v1/volumecrd
-	$(CONTROLLER_GEN_BIN) object paths=api/v1/availablecapacitycrd/availablecapacity_types.go paths=api/v1/availablecapacitycrd/groupversion_info.go  output:dir=api/v1/availablecapacitycrd
-	$(CONTROLLER_GEN_BIN) object paths=api/v1/acreservationcrd/availablecapacityreservation_types.go paths=api/v1/acreservationcrd/groupversion_info.go  output:dir=api/v1/acreservationcrd
-	$(CONTROLLER_GEN_BIN) object paths=api/v1/drivecrd/drive_types.go paths=api/v1/drivecrd/groupversion_info.go  output:dir=api/v1/drivecrd
-	$(CONTROLLER_GEN_BIN) object paths=api/v1/lvgcrd/logicalvolumegroup_types.go paths=api/v1/lvgcrd/groupversion_info.go  output:dir=api/v1/lvgcrd
-	$(CONTROLLER_GEN_BIN) object paths=api/v1/nodecrd/node_types.go paths=api/v1/nodecrd/groupversion_info.go  output:dir=api/v1/nodecrd
-
-generate-baremetal-crds:
-	$(CONTROLLER_GEN_BIN) $(CRD_OPTIONS) paths=api/v1/availablecapacitycrd/availablecapacity_types.go paths=api/v1/availablecapacitycrd/groupversion_info.go output:crd:dir=$(CSI_CHART_CRDS_PATH)
-	$(CONTROLLER_GEN_BIN) $(CRD_OPTIONS) paths=api/v1/acreservationcrd/availablecapacityreservation_types.go paths=api/v1/acreservationcrd/groupversion_info.go output:crd:dir=$(CSI_CHART_CRDS_PATH)
-	$(CONTROLLER_GEN_BIN) $(CRD_OPTIONS) paths=api/v1/volumecrd/volume_types.go paths=api/v1/volumecrd/groupversion_info.go output:crd:dir=$(CSI_CHART_CRDS_PATH)
-	$(CONTROLLER_GEN_BIN) $(CRD_OPTIONS) paths=api/v1/drivecrd/drive_types.go paths=api/v1/drivecrd/groupversion_info.go output:crd:dir=$(CSI_CHART_CRDS_PATH)
-	$(CONTROLLER_GEN_BIN) $(CRD_OPTIONS) paths=api/v1/lvgcrd/logicalvolumegroup_types.go paths=api/v1/lvgcrd/groupversion_info.go output:crd:dir=$(CSI_CHART_CRDS_PATH)
-	$(CONTROLLER_GEN_BIN) $(CRD_OPTIONS) paths=api/v1/nodecrd/node_types.go paths=api/v1/nodecrd/groupversion_info.go output:crd:dir=$(CSI_CHART_CRDS_PATH)
-
-generate-api: compile-proto generate-crds generate-deepcopy
+lint:
+	${GO_ENV_VARS} golangci-lint -v run ./...

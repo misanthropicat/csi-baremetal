@@ -1,25 +1,9 @@
+# Docker registry to pull images
+global:
+  registry:
+  registrySecret:
+# Image pull settings
 image:
-  registry: asdrepo.isus.emc.com:9042
-  tag: green
+  name: csi-baremetal-operator
+  tag: 0.5.0-1.9b906a1
   pullPolicy: Always
-
-env:
-  test: false
-
-# logging settings
-log:
-  format: text
-  level: info
-
-# to work only with node with such label
-nodeSelector:
-  key:
-  value:
-
-csi:
-  deploy: false
-  drivemgr: basemgr
-
-feature:
-  useexternalannotation: false
-  nodeIDAnnotation:

@@ -1,20 +1,24 @@
-# git diff files
-*.diff
-# idea files
+
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+bin
+
+# Test binary, build with `go test -c`
+*.test
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+
+# Kubernetes Generated files - skip generated files, except for vendored files
+
+!vendor/**/zz_generated.*
+
+# editor and IDE paraphernalia
 .idea
-*.iml
-# libries and build artifacts
-*_output
-vendor
-build/
-# tests results
-coverage.out
-coverage.html
-ci.log
-test/e2e/report.xml
-test/kind/kind
-# vscode
-.vscode
-# python 
-__pycache__
-bin/controller-gen
+*.swp
+*.swo
+*~

@@ -1,5 +1,5 @@
 ## Purpose
-### Issue #<!--- insert your issue number here -->
+### Issue dell/csi-baremetal#<!--- insert your issue number here -->
 
 _Describe your changes_
 
@@ -12,4 +12,4 @@ _Describe your changes_
 - [ ] All comments are resolved
 
 ## Testing
-_Link to custom CI build_
+_Testing details_
