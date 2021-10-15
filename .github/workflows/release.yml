@@ -13,47 +13,22 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      # - name: Create issue
-      #   id: create_issue
-      #   uses: JasonEtco/create-an-issue@v2
-      #   env:
-      #     GITHUB_TOKEN: ${{ secrets.CSI_WF_TOKEN }}
-      #   with:
-      #     filename: .github/release_template.md
-      #     assignees: misanthropicat
-      #   if: startsWith(github.ref, 'refs/tags/')
-
-      - name: Configure Git
-        run: |
-          git config user.name "$GITHUB_ACTOR"
-          git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
-      
-      - name: Set variables
-        id: vars
-        run: |
-          echo "::set-output name=version::$(make version)"
-          echo "::set-output name=release_tag::${GITHUB_REF/refs\/tags\//}"
-          echo "::set-output name=sha::${GITHUB_SHA::7}"
-          echo "::set-output name=issue_number::567"
-          echo "::set-output name=target_branch::${{ github.event.release.target_commitish }}"
-
-      # - name: Retag release with annotation
-      #   run: |
-      #     TAG_NAME=${{ steps.vars.outputs.release_tag }}
-      #     git push origin :$TAG_NAME
-      #     git tag -a -f $TAG_NAME ${{ steps.vars.outputs.sha }} -m "release $TAG_NAME: issue ${{ steps.vars.outputs.issue_number }}"
-      #     git push origin $TAG_NAME
-      #     echo "${{ steps.vars.outputs.target_branch }}"
-
-      - name: Install Helm
-        uses: azure/setup-helm@v1
-        with:
-          version: v3.4.0
-
-      - name: Update helm repository
-        uses: helm/chart-releaser-action@v1.2.1
+      - name: Create issue
+        id: create_issue
+        uses: JasonEtco/create-an-issue@v2
         env:
-          CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"          
+          GITHUB_TOKEN: ${{ secrets.CSI_WF_TOKEN }}
+        with:
+          filename: .github/release_template.md
+          assignees: misanthropicat
+        if: startsWith(github.ref, 'refs/tags/')
+
+      - name: Parse issue body
+        uses: peter-murray/issue-body-parser-action@v1
+        id: parse_issue
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          issue_id: ${{ steps.create_issue.outputs.number }}
 
       - name: Trigger release workflow in csi-baremetal-operator repo
         uses: benc-uk/workflow-dispatch@v1
@@ -61,9 +36,10 @@ jobs:
           workflow: Release Charts
           repo: misanthropicat/csi-baremetal-operator
           token: ${{ secrets.CSI_WF_TOKEN }}
-          ref: ${{ steps.vars.outputs.target_branch }}
+          ref: ${{ github.event.release.target_commitish }}
           inputs: |
-            { "issue_number": "${{ steps.vars.outputs.issue_number }}",
-              "csi_version": "${{ steps.vars.outputs.version }}",
-              "release_tag": "${{ steps.vars.outputs.release_tag }}" }
+            { "issue_number": "${{ steps.create_issue.outputs.number }}",
+              "csi_version": "${{ steps.parse_issue.payload.csi_version }}",
+              "csi_operator_version": "${{ steps.parse_issue.payload.csi_operator_version }}"
+              "release_tag": "${{ github.event.release.tag_name }}" }
         if: startsWith(github.ref, 'refs/tags/')
