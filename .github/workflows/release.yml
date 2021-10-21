@@ -32,7 +32,7 @@ jobs:
         uses: benc-uk/workflow-dispatch@v1
         with:
           workflow: Release Charts
-          repo: dell/csi-baremetal-operator
+          repo: misanthropicat/csi-baremetal-operator
           token: ${{ secrets.CSI_WF_TOKEN }}
           ref: ${{ github.event.release.target_commitish }}
           inputs: |
