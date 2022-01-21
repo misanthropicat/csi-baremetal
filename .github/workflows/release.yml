@@ -10,9 +10,6 @@ jobs:
     name: Release
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
-
       - name: Parse release description
         id: split_description
         uses: jungwinter/split@v2
@@ -30,6 +27,11 @@ jobs:
           echo "::set-output name=${component_name_1}::$version_1"
           echo "::set-output name=${component_name_2}::$version_2"
           echo "::set-output name=branch::$branch"
+
+      - name: Checkout code
+        uses: actions/checkout@v2
+        with:
+          ref: ${{ steps.vars.outputs.branch }}
 
       - name: Trigger release workflow in csi-baremetal-operator repo
         uses: benc-uk/workflow-dispatch@v1
