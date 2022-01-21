@@ -28,6 +28,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health/grpc_health_v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
@@ -52,6 +53,7 @@ import (
 	"github.com/dell/csi-baremetal/pkg/events"
 	"github.com/dell/csi-baremetal/pkg/metrics"
 	"github.com/dell/csi-baremetal/pkg/node"
+	"github.com/dell/csi-baremetal/pkg/node/wbt"
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -135,9 +137,14 @@ func main() {
 		logger.Fatalf("fail to start kubeCache, error: %v", err)
 	}
 
-	eventRecorder, err := prepareEventRecorder(nodeID, logger)
+	eventRecorder, err := prepareEventRecorder(*nodeName, logger)
 	if err != nil {
 		logger.Fatalf("fail to prepare event recorder: %v", err)
+	}
+
+	wbtWatcher, err := prepareWbtWatcher(k8SClient, eventRecorder, *nodeName, logger)
+	if err != nil {
+		logger.Fatalf("fail to prepare wbt watcher: %v", err)
 	}
 
 	// Wait till all events are sent/handled
@@ -145,7 +152,7 @@ func main() {
 
 	wrappedK8SClient := k8s.NewKubeClient(k8SClient, logger, *namespace)
 	csiNodeService := node.NewCSINodeService(
-		clientToDriveMgr, nodeID, logger, wrappedK8SClient, kubeCache, eventRecorder, featureConf)
+		clientToDriveMgr, nodeID, *nodeName, logger, wrappedK8SClient, kubeCache, eventRecorder, featureConf)
 
 	mgr := prepareCRDControllerManagers(
 		csiNodeService,
@@ -190,6 +197,9 @@ func main() {
 
 	// wait for readiness
 	waitForVolumeManagerReadiness(csiNodeService, logger)
+
+	// start to updating Wbt Config
+	wbtWatcher.StartWatch(csiNodeService)
 
 	logger.Info("Starting handle CSI calls ...")
 	if err := csiUDSServer.RunServer(); err != nil && err != grpc.ErrServerStopped {
@@ -308,7 +318,7 @@ func prepareCRDControllerManagers(volumeCtrl *node.CSINodeService, lvgCtrl *lvg.
 }
 
 // prepareEventRecorder helper which makes all the work to get EventRecorder
-func prepareEventRecorder(nodeUID string, logger *logrus.Logger) (*events.Recorder, error) {
+func prepareEventRecorder(nodeName string, logger *logrus.Logger) (*events.Recorder, error) {
 	// clientset needed to send events
 	k8SClientset, err := k8s.GetK8SClientset()
 	if err != nil {
@@ -323,9 +333,22 @@ func prepareEventRecorder(nodeUID string, logger *logrus.Logger) (*events.Record
 		return nil, fmt.Errorf("fail to prepare kubernetes scheme, error: %s", err)
 	}
 
-	eventRecorder, err := events.New(componentName, nodeUID, eventInter, scheme, logger)
+	eventRecorder, err := events.New(componentName, nodeName, eventInter, scheme, logger)
 	if err != nil {
 		return nil, fmt.Errorf("fail to create events recorder, error: %s", err)
 	}
 	return eventRecorder, nil
+}
+
+func prepareWbtWatcher(client k8sClient.Client, eventsRecorder *events.Recorder, nodeName string, logger *logrus.Logger) (*wbt.ConfWatcher, error) {
+	k8sNode := &corev1.Node{}
+	err := client.Get(context.Background(), k8sClient.ObjectKey{Name: nodeName}, k8sNode)
+	if err != nil {
+		return nil, err
+	}
+
+	nodeKernel := k8sNode.Status.NodeInfo.KernelVersion
+	ll := logger.WithField("componentName", "WbtWatcher")
+
+	return wbt.NewConfWatcher(client, eventsRecorder, ll, nodeKernel), nil
 }

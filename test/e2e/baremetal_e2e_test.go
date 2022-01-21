@@ -42,6 +42,10 @@ func registerCustomFlags(flags *flag.FlagSet) {
 		"/tmp/charts", "Path to folder with helm charts")
 	flags.BoolVar(&common.BMDriverTestContext.CompleteUninstall, "completeUninstall",
 		true, "Uninstall pvc, volumes, lvgs, csibmnodes")
+	flags.BoolVar(&common.BMDriverTestContext.NeedAllTests, "all-tests",
+		false, "Execute all existing e2e tests")
+	flags.DurationVar(&common.BMDriverTestContext.Timeout, "timeout-short-ci",
+		0, "Timeout for test suite. Available only if not all-tests")
 }
 
 func init() {
@@ -55,7 +59,7 @@ func Test(t *testing.T) {
 	flag.Parse()
 	framework.AfterReadingAllFlags(&framework.TestContext)
 	gomega.RegisterFailHandler(ginkgo.Fail)
-	junitReporter := reporters.NewJUnitReporter("report.xml")
+	junitReporter := reporters.NewJUnitReporter("reports/report.xml")
 	ginkgo.RunSpecsWithDefaultAndCustomReporters(t, "CSI Suite", []ginkgo.Reporter{junitReporter})
 }
 

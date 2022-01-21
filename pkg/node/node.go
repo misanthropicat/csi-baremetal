@@ -45,6 +45,7 @@ import (
 	"github.com/dell/csi-baremetal/pkg/base/util"
 	"github.com/dell/csi-baremetal/pkg/common"
 	"github.com/dell/csi-baremetal/pkg/controller"
+	"github.com/dell/csi-baremetal/pkg/controller/mountoptions"
 	csibmnodeconst "github.com/dell/csi-baremetal/pkg/crcontrollers/node/common"
 	"github.com/dell/csi-baremetal/pkg/eventing"
 )
@@ -54,6 +55,9 @@ const (
 
 	fakeAttachVolumeAnnotation = "fake-attach"
 	fakeAttachVolumeKey        = "yes"
+
+	wbtChangedVolumeAnnotation = "wbt-changed"
+	wbtChangedVolumeKey        = "yes"
 )
 
 // CSINodeService is the implementation of NodeServer interface from GO CSI specification.
@@ -85,6 +89,7 @@ const (
 // Returns an instance of CSINodeService
 func NewCSINodeService(client api.DriveServiceClient,
 	nodeID string,
+	nodeName string,
 	logger *logrus.Logger,
 	k8sClient *k8s.KubeClient,
 	k8sCache k8s.CRReader,
@@ -92,7 +97,7 @@ func NewCSINodeService(client api.DriveServiceClient,
 	featureConf featureconfig.FeatureChecker) *CSINodeService {
 	e := command.NewExecutor(logger)
 	s := &CSINodeService{
-		VolumeManager:  *NewVolumeManager(client, e, logger, k8sClient, k8sCache, recorder, nodeID),
+		VolumeManager:  *NewVolumeManager(client, e, logger, k8sClient, k8sCache, recorder, nodeID, nodeName),
 		svc:            common.NewVolumeOperationsImpl(k8sClient, logger, cache.NewMemCache(), featureConf),
 		IdentityServer: controller.NewIdentityServer(base.PluginName, base.PluginVersion),
 		volMu:          keymutex.NewHashed(0),
@@ -236,6 +241,16 @@ func (s *CSINodeService) NodeStageVolume(ctx context.Context, req *csi.NodeStage
 			"Fake-attach cleared for volume with ID %s", volumeID)
 	}
 
+	if newStatus == apiV1.VolumeReady && s.VolumeManager.checkWbtChangingEnable(ctx, volumeCR) {
+		if err := s.VolumeManager.setWbtValue(volumeCR); err != nil {
+			ll.Errorf("Unable to set custom WBT value for volume %s: %v", volumeCR.Name, err)
+			s.VolumeManager.recorder.Eventf(volumeCR, eventing.WBTValueSetFailed,
+				"Unable to set custom WBT value for volume %s", volumeCR.Name)
+		} else {
+			volumeCR.Annotations[wbtChangedVolumeAnnotation] = wbtChangedVolumeKey
+		}
+	}
+
 	if currStatus != apiV1.VolumeReady {
 		volumeCR.Spec.CSIStatus = newStatus
 		if err := s.k8sClient.UpdateCR(ctx, volumeCR); err != nil {
@@ -304,9 +319,24 @@ func (s *CSINodeService) NodeUnstageVolume(ctx context.Context, req *csi.NodeUns
 	)
 
 	if volumeCR.Annotations[fakeAttachVolumeAnnotation] != fakeAttachVolumeKey {
-		if errToReturn = s.fsOps.UnmountWithCheck(getStagingPath(ll, req.GetStagingTargetPath())); errToReturn != nil {
+		targetPath := getStagingPath(ll, req.GetStagingTargetPath())
+		errToReturn = s.fsOps.UnmountWithCheck(targetPath)
+		if errToReturn == nil {
+			errToReturn = s.fsOps.RmDir(targetPath)
+		}
+
+		if errToReturn != nil {
 			volumeCR.Spec.CSIStatus = apiV1.Failed
 			resp = nil
+		}
+	}
+
+	if val, ok := volumeCR.Annotations[wbtChangedVolumeAnnotation]; ok && val == wbtChangedVolumeKey {
+		delete(volumeCR.Annotations, wbtChangedVolumeAnnotation)
+		if err := s.VolumeManager.restoreWbtValue(volumeCR); err != nil {
+			ll.Errorf("Unable to restore WBT value for volume %s: %v", volumeCR.Name, err)
+			s.VolumeManager.recorder.Eventf(volumeCR, eventing.WBTValueSetFailed,
+				"Unable to restore WBT value for volume %s", volumeCR.Name)
 		}
 	}
 
@@ -353,9 +383,14 @@ func (s *CSINodeService) NodePublishVolume(ctx context.Context, req *csi.NodePub
 		return nil, status.Error(codes.InvalidArgument, "Target Path missing in request")
 	}
 	var (
-		inline bool
-		err    error
+		inline       bool
+		err          error
+		mountOptions []string
 	)
+
+	if accessType, ok := req.GetVolumeCapability().AccessType.(*csi.VolumeCapability_Mount); ok {
+		mountOptions = mountoptions.FilterWithType(mountoptions.PublishCmdOpt, accessType.Mount.GetMountFlags())
+	}
 
 	if req.GetVolumeContext() != nil {
 		val, ok := req.GetVolumeContext()[EphemeralKey]
@@ -417,7 +452,7 @@ func (s *CSINodeService) NodePublishVolume(ctx context.Context, req *csi.NodePub
 		}
 	} else {
 		_, isBlock := req.GetVolumeCapability().GetAccessType().(*csi.VolumeCapability_Block)
-		if err := s.fsOps.PrepareAndPerformMount(srcPath, dstPath, isBlock, !isBlock); err != nil {
+		if err := s.fsOps.PrepareAndPerformMount(srcPath, dstPath, isBlock, !isBlock, mountOptions...); err != nil {
 			ll.Errorf("Unable to mount volume: %v", err)
 			newStatus = apiV1.Failed
 			resp, errToReturn = nil, fmt.Errorf("failed to publish volume: mount error %s", err.Error())

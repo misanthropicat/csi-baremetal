@@ -47,14 +47,15 @@ var (
 	testLVGName = "lvg-cr-1"
 	driveUUID   = "drive-uuid"
 	nodeID      = "fake-node"
+	nodeName    = "fake-node-name"
 	targetPath  = "/tmp/targetPath"
 	stagePath   = "/tmp/stagePath"
 	testPodName = "pod-1"
 
 	testLogger  = getTestLogger()
 	testCtx     = context.Background()
-	disk1       = api.Drive{UUID: uuid.New().String(), SerialNumber: "hdd1", Size: 1024 * 1024 * 1024 * 500, NodeId: nodeID}
-	disk2       = api.Drive{UUID: uuid.New().String(), SerialNumber: "hdd2", Size: 1024 * 1024 * 1024 * 200, NodeId: nodeID}
+	disk1       = api.Drive{UUID: uuid.New().String(), SerialNumber: "hdd1", Size: 1024 * 1024 * 1024 * 500, NodeId: nodeID, Path: "/dev/sda"}
+	disk2       = api.Drive{UUID: uuid.New().String(), SerialNumber: "hdd2", Size: 1024 * 1024 * 1024 * 200, NodeId: nodeID, Path: "/dev/sda"}
 	testAC1Name = fmt.Sprintf("%s-%s", nodeID, strings.ToLower(disk1.UUID))
 	testAC1     = accrd.AvailableCapacity{
 		TypeMeta:   k8smetav1.TypeMeta{Kind: "AvailableCapacity", APIVersion: apiV1.APIV1Version},

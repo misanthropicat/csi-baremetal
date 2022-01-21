@@ -8,8 +8,8 @@ CONTROLLER_GEN_BIN=./bin/controller-gen
 CRD_OPTIONS ?= "crd:trivialVersions=true"
 
 ### version
-MAJOR            := 0
-MINOR            := 5
+MAJOR            := 1
+MINOR            := 1
 PATCH            := 0
 PRODUCT_VERSION  ?= ${MAJOR}.${MINOR}.${PATCH}
 BUILD_REL_A      := $(shell git rev-list HEAD |wc -l)
@@ -22,7 +22,7 @@ TAG              := ${FULL_VERSION}
 BRANCH           := $(shell git rev-parse --abbrev-ref HEAD)
 
 ### third-party components version
-CSI_PROVISIONER_TAG := v1.6.0
+CSI_PROVISIONER_TAG := v3.0.0
 CSI_RESIZER_TAG     := v1.1.0
 CSI_REGISTRAR_TAG   := v1.3.0
 LIVENESS_PROBE_TAG  := v2.1.0
@@ -74,7 +74,14 @@ LDFLAGS := -ldflags "-X ${METRICS_PACKAGE}.Revision=${RELEASE_STR} -X ${METRICS_
 ### Kind
 KIND_DIR := test/kind
 KIND     := ${KIND_DIR}/kind
-KIND_VER := 0.8.1
+KIND_VER := 0.11.1
+KIND_CONFIG := kind.yaml
+KIND_IMAGE_VERSION := v1.19.11
+KIND_WAIT := 30s 
+
+### ci vars
+# timeout for short test suite, must be parsable as Go time.Duration (60m, 2h)
+SHORT_CI_TIMEOUT := 60m
 
 # override some of variables, optional file
 -include variables.override.mk

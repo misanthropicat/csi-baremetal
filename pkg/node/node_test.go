@@ -19,6 +19,7 @@ package node
 import (
 	"errors"
 	"fmt"
+	wbtcommon "github.com/dell/csi-baremetal/pkg/node/wbt/common"
 	"path"
 	"testing"
 	"time"
@@ -42,6 +43,7 @@ import (
 	"github.com/dell/csi-baremetal/pkg/base/util"
 	csibmnodeconst "github.com/dell/csi-baremetal/pkg/crcontrollers/node/common"
 	"github.com/dell/csi-baremetal/pkg/mocks"
+	mocklu "github.com/dell/csi-baremetal/pkg/mocks/linuxutils"
 	mockProv "github.com/dell/csi-baremetal/pkg/mocks/provisioners"
 	p "github.com/dell/csi-baremetal/pkg/node/provisioners"
 	"github.com/dell/csi-baremetal/pkg/testutils"
@@ -52,6 +54,7 @@ var (
 	prov   *mockProv.MockProvisioner
 	fsOps  *mockProv.MockFsOpts
 	volOps *mocks.VolumeOperationsMock
+	wbtOps *mocklu.MockWrapWbt
 )
 
 func setVariables() {
@@ -59,12 +62,14 @@ func setVariables() {
 	prov = &mockProv.MockProvisioner{}
 	fsOps = &mockProv.MockFsOpts{}
 	volOps = &mocks.VolumeOperationsMock{}
+	wbtOps = &mocklu.MockWrapWbt{}
 	node.provisioners = map[p.VolumeType]p.Provisioner{
 		p.DriveBasedVolumeType: prov,
 		p.LVMBasedVolumeType:   prov,
 	}
 	node.fsOps = fsOps
 	node.svc = volOps
+	node.wbtOps = wbtOps
 }
 
 func TestCSINodeService(t *testing.T) {
@@ -407,8 +412,9 @@ var _ = Describe("CSINodeService NodeUnStage()", func() {
 	Context("NodeUnStage() success", func() {
 		It("Should unstage volume", func() {
 			req := getNodeUnstageRequest(testV1ID, stagePath)
-			fsOps.On("UnmountWithCheck",
-				path.Join(req.GetStagingTargetPath(), stagingFileName)).Return(nil)
+			targetPath := path.Join(req.GetStagingTargetPath(), stagingFileName)
+			fsOps.On("UnmountWithCheck", targetPath).Return(nil)
+			fsOps.On("RmDir", targetPath).Return(nil)
 
 			resp, err := node.NodeUnstageVolume(testCtx, req)
 			Expect(resp).NotTo(BeNil())
@@ -486,8 +492,10 @@ var _ = Describe("CSINodeService NodeUnStage()", func() {
 			req := getNodeUnstageRequest(testV1ID, stagePath)
 			secondUnstageErr := make(chan error)
 			// UnmountWithCheck should only once respond with no error
+			targetPath := path.Join(req.GetStagingTargetPath(), stagingFileName)
+			fsOps.On("RmDir", targetPath).Return(nil)
 			fsOps.On("UnmountWithCheck",
-				path.Join(req.GetStagingTargetPath(), stagingFileName)).Return(nil).Run(func(_ mock.Arguments) {
+				targetPath).Return(nil).Run(func(_ mock.Arguments) {
 				go func() {
 					_, err := node.NodeUnstageVolume(testCtx, req)
 					secondUnstageErr <- err
@@ -822,6 +830,160 @@ var _ = Describe("CSINodeService Fake-Attach", func() {
 	})
 })
 
+var _ = Describe("CSINodeService Wbt Configuration", func() {
+	BeforeEach(func() {
+		setVariables()
+	})
+	Context("NodeStage() ", func() {
+		It("success", func() {
+			// testVolume2 has Create status
+			req := getNodeStageRequest(testVolume2.Id, *testVolumeCap)
+			partitionPath := "/partition/path/for/volume1"
+			prov.On("GetVolumePath", testVolume2).Return(partitionPath, nil)
+			fsOps.On("PrepareAndPerformMount",
+				partitionPath, path.Join(req.GetStagingTargetPath(), stagingFileName), true, false).
+				Return(nil)
+
+			var (
+				volumeMode = ""
+				volumeSC   = "csi-baremetal-sc-hdd"
+				wbtConf    = &wbtcommon.WbtConfig{
+					Enable: true,
+					VolumeOptions: wbtcommon.VolumeOptions{
+						Modes:          []string{volumeMode},
+						StorageClasses: []string{volumeSC},
+					},
+				}
+				wbtValue uint32 = 0
+				device          = "sda" //testDrive.Spec.Path = "/dev/sda"
+			)
+			node.SetWbtConfig(wbtConf)
+			wbtOps.On("SetValue", device, wbtValue).Return(nil)
+
+			pv := &corev1.PersistentVolume{}
+			pv.Name = testVolume2.Id
+			pv.Spec.StorageClassName = volumeSC
+			err := node.k8sClient.Create(testCtx, pv)
+			Expect(err).To(BeNil())
+
+			resp, err := node.NodeStageVolume(testCtx, req)
+			Expect(resp).NotTo(BeNil())
+			Expect(err).To(BeNil())
+			// check volume CR status
+			volumeCR := &vcrd.Volume{}
+			err = node.k8sClient.ReadCR(testCtx, testVolume2.Id, "", volumeCR)
+			Expect(err).To(BeNil())
+			Expect(volumeCR.Spec.CSIStatus).To(Equal(apiV1.VolumeReady))
+			Expect(volumeCR.Annotations[wbtChangedVolumeAnnotation]).To(Equal(wbtChangedVolumeKey))
+		})
+		It("failed", func() {
+			// testVolume2 has Create status
+			req := getNodeStageRequest(testVolume2.Id, *testVolumeCap)
+			partitionPath := "/partition/path/for/volume1"
+			prov.On("GetVolumePath", testVolume2).Return(partitionPath, nil)
+			fsOps.On("PrepareAndPerformMount",
+				partitionPath, path.Join(req.GetStagingTargetPath(), stagingFileName), true, false).
+				Return(nil)
+
+			var (
+				volumeMode = ""
+				volumeSC   = "csi-baremetal-sc-hdd"
+				wbtConf    = &wbtcommon.WbtConfig{
+					Enable: true,
+					VolumeOptions: wbtcommon.VolumeOptions{
+						Modes:          []string{volumeMode},
+						StorageClasses: []string{volumeSC},
+					},
+				}
+				wbtValue uint32 = 0
+				device          = "sda" //testDrive.Spec.Path = "/dev/sda"
+				someErr         = fmt.Errorf("some err")
+			)
+			node.SetWbtConfig(wbtConf)
+			wbtOps.On("SetValue", device, wbtValue).Return(someErr)
+
+			pv := &corev1.PersistentVolume{}
+			pv.Name = testVolume2.Id
+			pv.Spec.StorageClassName = volumeSC
+			err := node.k8sClient.Create(testCtx, pv)
+			Expect(err).To(BeNil())
+
+			resp, err := node.NodeStageVolume(testCtx, req)
+			Expect(resp).NotTo(BeNil())
+			Expect(err).To(BeNil())
+			// check volume CR status
+			volumeCR := &vcrd.Volume{}
+			err = node.k8sClient.ReadCR(testCtx, testVolume2.Id, "", volumeCR)
+			Expect(err).To(BeNil())
+			Expect(volumeCR.Spec.CSIStatus).To(Equal(apiV1.VolumeReady))
+			_, ok := volumeCR.Annotations[wbtChangedVolumeAnnotation]
+			Expect(ok).To(BeFalse())
+		})
+	})
+
+	Context("NodeUnStage()", func() {
+		It("success", func() {
+			req := getNodeUnstageRequest(testV1ID, stagePath)
+			targetPath := path.Join(req.GetStagingTargetPath(), stagingFileName)
+			fsOps.On("UnmountWithCheck", targetPath).Return(nil)
+			fsOps.On("RmDir", targetPath).Return(nil)
+
+			vol1 := &vcrd.Volume{}
+			err := node.k8sClient.ReadCR(testCtx, testVolume1.Id, testNs, vol1)
+			Expect(err).To(BeNil())
+			vol1.Annotations = map[string]string{wbtChangedVolumeAnnotation: wbtChangedVolumeKey}
+			err = node.k8sClient.UpdateCR(testCtx, vol1)
+			Expect(err).To(BeNil())
+
+			var (
+				device = "sda" //testDrive.Spec.Path = "/dev/sda"
+			)
+			wbtOps.On("RestoreDefault", device).Return(nil)
+
+			resp, err := node.NodeUnstageVolume(testCtx, req)
+			Expect(resp).NotTo(BeNil())
+			Expect(err).To(BeNil())
+			// check owners and CSI status
+			volumeCR := &vcrd.Volume{}
+			err = node.k8sClient.ReadCR(testCtx, testV1ID, "", volumeCR)
+			Expect(err).To(BeNil())
+			Expect(volumeCR.Spec.CSIStatus).To(Equal(apiV1.Created))
+			_, ok := volumeCR.Annotations[wbtChangedVolumeAnnotation]
+			Expect(ok).To(Equal(false))
+		})
+		It("failed", func() {
+			req := getNodeUnstageRequest(testV1ID, stagePath)
+			targetPath := path.Join(req.GetStagingTargetPath(), stagingFileName)
+			fsOps.On("UnmountWithCheck", targetPath).Return(nil)
+			fsOps.On("RmDir", targetPath).Return(nil)
+
+			vol1 := &vcrd.Volume{}
+			err := node.k8sClient.ReadCR(testCtx, testVolume1.Id, testNs, vol1)
+			Expect(err).To(BeNil())
+			vol1.Annotations = map[string]string{wbtChangedVolumeAnnotation: wbtChangedVolumeKey}
+			err = node.k8sClient.UpdateCR(testCtx, vol1)
+			Expect(err).To(BeNil())
+
+			var (
+				device  = "sda" //testDrive.Spec.Path = "/dev/sda"
+				someErr = fmt.Errorf("some err")
+			)
+			wbtOps.On("RestoreDefault", device).Return(someErr)
+
+			resp, err := node.NodeUnstageVolume(testCtx, req)
+			Expect(resp).NotTo(BeNil())
+			Expect(err).To(BeNil())
+			// check owners and CSI status
+			volumeCR := &vcrd.Volume{}
+			err = node.k8sClient.ReadCR(testCtx, testV1ID, "", volumeCR)
+			Expect(err).To(BeNil())
+			Expect(volumeCR.Spec.CSIStatus).To(Equal(apiV1.Created))
+			_, ok := volumeCR.Annotations[wbtChangedVolumeAnnotation]
+			Expect(ok).To(Equal(false))
+		})
+	})
+})
+
 func getNodePublishRequest(volumeID, targetPath string, volumeCap csi.VolumeCapability) *csi.NodePublishVolumeRequest {
 	return &csi.NodePublishVolumeRequest{
 		VolumeId:          volumeID,
@@ -860,7 +1022,7 @@ func newNodeService() *CSINodeService {
 	if err != nil {
 		panic(err)
 	}
-	node := NewCSINodeService(client, nodeID, testLogger, kubeClient, kubeClient,
+	node := NewCSINodeService(client, nodeID, nodeName, testLogger, kubeClient, kubeClient,
 		new(mocks.NoOpRecorder), featureconfig.NewFeatureConfig())
 
 	driveCR1 := node.k8sClient.ConstructDriveCR(disk1.UUID, disk1)
