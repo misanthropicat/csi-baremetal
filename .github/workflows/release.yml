@@ -37,7 +37,6 @@ jobs:
           workflow: Release Charts
           repo: dell/csi-baremetal-operator
           token: ${{ secrets.CSI_WF_TOKEN }}
-          ref: refs/heads/${{ github.event.release.target_commitish }}
           inputs: |
             { "csi_version": "${{ steps.vars.outputs.csi_version }}",
               "csi_operator_version": "${{ steps.vars.outputs.csi_operator_version }}",
