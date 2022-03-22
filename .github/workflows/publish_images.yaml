@@ -15,7 +15,7 @@ jobs:
 
       - name: Set vars
         id: vars
-        run: export REPO=ghcr.io/$GITHUB_REPOSITORY/csi-baremetal-devkit
+        run: export REPO=ghcr.io/${{ github.repository }}/csi-baremetal-devkit
 
       - name: Build and push devkit
         run: make push
