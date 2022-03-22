@@ -17,6 +17,9 @@ jobs:
         id: vars
         run: echo "::set-output name=image_repo::ghcr.io/${{ github.repository }}/csi-baremetal-devkit"
 
+      - name: Login to Docker registry
+        run: echo ${{ secrets.GH_PACKAGES_TOKEN }} | docker login ghcr.io -u ${{ secrets.GH_PACKAGES_USER }} --password-stdin
+
       - name: Build and push devkit
         run: make push REPO=${{ steps.vars.outputs.image_repo }}
         working-directory: devkit
