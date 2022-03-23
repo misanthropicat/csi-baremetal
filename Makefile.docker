@@ -37,10 +37,7 @@ base-image-controller:
 	docker build --network host --file ./build/${CONTROLLER}/Dockerfile.build --tag ${CONTROLLER}:base ./build/${CONTROLLER}
 
 image-drivemgr: base-image-drivemgr
-	install -D -d ./pkg/${DRIVE_MANAGER}/${DRIVE_MANAGER_TYPE}/ ./build/${DRIVE_MANAGER}/${DRIVE_MANAGER_TYPE}/
-	cd ./build/
-	docker build --network host --force-rm --tag ${REGISTRY}/${PROJECT}-${DRIVE_MANAGER_TYPE}:${TAG} ./build/${DRIVE_MANAGER}/${DRIVE_MANAGER_TYPE}
-	cd ..
+	docker build --network host --force-rm --tag ${REGISTRY}/${PROJECT}-${DRIVE_MANAGER_TYPE}:${TAG} ./pkg/${DRIVE_MANAGER}/${DRIVE_MANAGER_TYPE}
 
 image-node: base-image-node
 	cp ./pkg/${NODE}/Dockerfile* ./build/${NODE}/
