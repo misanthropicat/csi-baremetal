@@ -1,25 +1,36 @@
 name: Publish docker images
 
 on:
-  release:
-    types:
-      - created
+  push:
+    branches:
+      - "feature-*"
+
+env:
+  REGISTRY: ghcr.io/${{ github.repository }}
 
 jobs:
   build:
-    name: Build and publish devkit
+    name: Build and publish images
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
     steps:
       - name: Check out code
         uses: actions/checkout@v2
 
-      - name: Set vars
-        id: vars
-        run: echo "::set-output name=image_repo::ghcr.io/${{ github.repository }}/csi-baremetal-devkit"
+      - name: Log in to GitHub Docker Registry
+        uses: docker/login-action@v1.14.1
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Login to Docker registry
-        run: echo ${{ secrets.GH_PACKAGES_TOKEN }} | docker login ghcr.io -u ${{ secrets.GH_PACKAGES_USER }} --password-stdin
+      - name: Build images
+        run: |
+          ls
+          make images
 
-      - name: Build and push devkit
-        run: make push REPO=${{ steps.vars.outputs.image_repo }}
-        working-directory: devkit
+      - name: Push images
+        run: make push REGISTRY=${{ env.REGISTRY }} PROJECT=${{ github.actor }}
