@@ -29,8 +29,8 @@ jobs:
 
       - name: Build images
         run: |
+          make build
           make download-grpc-health-probe
-          make build-extender
           make images
 
       - name: Push images
