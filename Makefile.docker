@@ -26,6 +26,7 @@ download-grpc-health-probe:
 # NOTE: Output directory for binary file should be in Docker context.
 # So we can't use csi-baremetal/build to build the image.
 base-image-node:
+	cp ./build/${HEALTH_PROBE} ./pkg/${NODE}/
 	docker build --network host --file ./pkg/${NODE}/Dockerfile.build --tag ${NODE}:base ./pkg/${NODE}
 	docker build --network host --file ./pkg/${NODE}/Dockerfile-kernel-5.4.build --tag ${NODE}:base-kernel-5.4 ./pkg/${NODE}
 
