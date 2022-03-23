@@ -2,7 +2,7 @@ FROM    basemgr:base
 
 LABEL   description="Bare-metal CSI Base Drive Manager"
 
-ADD     basemgr base-drivemgr
+ADD     . base-drivemgr
 
 EXPOSE  8888
 
