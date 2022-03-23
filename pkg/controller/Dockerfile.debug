@@ -2,7 +2,7 @@ FROM    controller:base
 
 LABEL   description="Bare-metal CSI Controller Service"
 
-ADD     controller /controller
+ADD     . /controller
 ADD     dlv /dlv
 
 EXPOSE  40000

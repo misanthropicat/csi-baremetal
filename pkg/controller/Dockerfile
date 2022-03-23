@@ -2,7 +2,7 @@ FROM    controller:base
 
 LABEL   description="Bare-metal CSI Controller Service"
 
-ADD     controller /controller
+ADD     . /controller
 
 RUN addgroup -S bmcsi && adduser -S bmcsi -u 1000 -G bmcsi
 
