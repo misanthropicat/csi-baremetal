@@ -38,19 +38,18 @@ spec:
         - name: logs
           mountPath: /usr/share/nginx/logs
       volumes:
-      - name: www 
+      - name: www
         csi:
           driver: csi-baremetal
           volumeAttributes:
             size: 60Mi
-      - name: data 
+      - name: data
         csi:
           driver: csi-baremetal
           volumeAttributes:
             size: 60Mi
-      - name: logs 
+      - name: logs
         csi:
           driver: csi-baremetal
           volumeAttributes:
             size: 60Mi
-
