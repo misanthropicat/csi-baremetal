@@ -39,30 +39,25 @@ image-drivemgr: base-image-drivemgr
 	docker build --network host --force-rm --tag ${REGISTRY}/${PROJECT}-${DRIVE_MANAGER_TYPE}:${TAG} ./pkg/${DRIVE_MANAGER}/${DRIVE_MANAGER_TYPE}
 
 image-node: base-image-node
-	cp ./pkg/${NODE}/Dockerfile* ./build/${NODE}/
-	docker build --network host --force-rm --tag ${REGISTRY}/${PROJECT}-${NODE}:${TAG} ./build/${NODE}
-	docker build --network host --force-rm  --file ./build/${NODE}/Dockerfile-kernel-5.4 --tag ${REGISTRY}/${PROJECT}-${NODE}-kernel-5.4:${TAG} ./build/${NODE}
+	docker build --network host --force-rm --tag ${REGISTRY}/${PROJECT}-${NODE}:${TAG} ./pkg/${NODE}
+	docker build --network host --force-rm  --file ./pkg/${NODE}/Dockerfile-kernel-5.4 --tag ${REGISTRY}/${PROJECT}-${NODE}-kernel-5.4:${TAG} ./pkg/${NODE}
 
 image-controller: base-image-controller
-	cp ./pkg/${CONTROLLER}/Dockerfile ./build/${CONTROLLER}/
-	docker build --network host --force-rm --tag ${REGISTRY}/${PROJECT}-${CONTROLLER}:${TAG} ./build/${CONTROLLER}
+	docker build --network host --force-rm --tag ${REGISTRY}/${PROJECT}-${CONTROLLER}:${TAG} ./pkg/${CONTROLLER}
 
 image-extender:
-	cp ./pkg/${SCHEDULER}/${EXTENDER}/Dockerfile ./build/${SCHEDULING_PKG}/${EXTENDER}/
-	cp ./build/${HEALTH_PROBE} ./build/${SCHEDULING_PKG}/${EXTENDER}/
-	docker build --network host --force-rm --tag ${REGISTRY}/${PROJECT}-${SCHEDULER}-${EXTENDER}:${TAG} ./build/${SCHEDULING_PKG}/${EXTENDER}
+	cp ./build/${HEALTH_PROBE} ./pkg/${SCHEDULING_PKG}/${EXTENDER}/
+	docker build --network host --force-rm --tag ${REGISTRY}/${PROJECT}-${SCHEDULER}-${EXTENDER}:${TAG} ./pkg/${SCHEDULING_PKG}/${EXTENDER}
 
 image-extender-patcher:
 	docker build --network host --force-rm --tag ${REGISTRY}/${PROJECT}-${EXTENDER_PATCHER}:${TAG} ./pkg/${SCHEDULER_EXTENDER_PATCHER_PKG}
 
 image-scheduler:
-	cp ./pkg/${SCHEDULER}/${PLUGIN}/Dockerfile ./build/${SCHEDULING_PKG}/${SCHEDULER}/
-	docker build --network host --force-rm --tag ${REGISTRY}/${PROJECT}-${SCHEDULER}:${TAG} ./build/${SCHEDULING_PKG}/${SCHEDULER}
+	docker build --network host --force-rm --tag ${REGISTRY}/${PROJECT}-${SCHEDULER}:${TAG} ./pkg/${SCHEDULING_PKG}/${SCHEDULER}
 
 image-node-controller:
-	cp ./pkg/${CR_CONTROLLERS}/${NODE_CONTROLLER_PKG}/Dockerfile ./build/${CR_CONTROLLERS}/${NODE_CONTROLLER}/
 	docker build --network host --force-rm --tag ${REGISTRY}/${PROJECT}-${NODE_CONTROLLER}:${TAG} \
-	./build/${CR_CONTROLLERS}/${NODE_CONTROLLER}
+	./pkg/${CR_CONTROLLERS}/${NODE_CONTROLLER}
 
 ###################
 ### Push images ###
