@@ -45,8 +45,8 @@ image-controller: base-image-controller
 	docker build --network host --force-rm --tag ${REGISTRY}/${PROJECT}-${CONTROLLER}:${TAG} ./pkg/${CONTROLLER}
 
 image-extender:
-	cp ./build/${HEALTH_PROBE} ./pkg/${SCHEDULING_PKG}/${EXTENDER}/
-	docker build --network host --force-rm --tag ${REGISTRY}/${PROJECT}-${SCHEDULER}-${EXTENDER}:${TAG} ./pkg/${SCHEDULING_PKG}/${EXTENDER}
+	cp ./build/${HEALTH_PROBE} ./build/${SCHEDULING_PKG}/${EXTENDER}/
+	docker build --network host --force-rm --tag ${REGISTRY}/${PROJECT}-${SCHEDULER}-${EXTENDER}:${TAG} ./build/${SCHEDULING_PKG}/${EXTENDER}
 
 image-extender-patcher:
 	docker build --network host --force-rm --tag ${REGISTRY}/${PROJECT}-${EXTENDER_PATCHER}:${TAG} ./pkg/${SCHEDULER_EXTENDER_PATCHER_PKG}
