@@ -35,7 +35,7 @@ jobs:
         uses: benc-uk/workflow-dispatch@v1
         with:
           workflow: Release Charts
-          repo: dell/csi-baremetal-operator
+          repo: misanthropicat/csi-baremetal-operator
           token: ${{ secrets.CSI_WF_TOKEN }}
           ref: refs/heads/master  # need to hardcode here because of this issue: https://github.com/benc-uk/workflow-dispatch/issues/11
           inputs: |
