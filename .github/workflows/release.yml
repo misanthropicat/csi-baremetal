@@ -43,5 +43,5 @@ jobs:
               "csi_operator_version": "${{ steps.vars.outputs.csi_operator_version }}",
               "release_tag": "${{ github.event.release.tag_name }}",
               "branch": "${{ github.event.release.target_commitish }}",
-              "prerelease": ${{ github.event.release.prerelease }} }
+              "prerelease": "${{ github.event.release.prerelease }}" }
         if: startsWith(github.ref, 'refs/tags/')
