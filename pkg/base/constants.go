@@ -25,6 +25,9 @@ type CtxKey string
 // PluginVersion is a version of current CSI plugin
 var PluginVersion = ""
 
+// ProjectPath is the current path of a project
+var ProjectPath = ""
+
 const (
 	// RequestUUID is the constant for context request
 	RequestUUID CtxKey = "RequestUUID"
@@ -47,6 +50,9 @@ const (
 
 	// DefaultTimeoutForVolumeOperations is the timeout in which we expect that any operation with volume should be finished
 	DefaultTimeoutForVolumeOperations = 10 * time.Minute
+
+	// DefaultTimeoutForVolumeUpdate is the timeout in which we expect that any update with volume
+	DefaultTimeoutForVolumeUpdate = 30 * time.Second
 
 	// DefaultRequeueForVolume is the interval for volume reconcile
 	DefaultRequeueForVolume = 5 * time.Second
