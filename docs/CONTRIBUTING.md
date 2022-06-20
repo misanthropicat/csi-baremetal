@@ -98,10 +98,10 @@ You have to commit the changes to go.mod, go.sum and before submitting the pull 
 
 #### Use devkit
 
-[This guide is intended](devkit/README.md) as a quickstart on how to use devkit for CSI development env. 
+[This guide is intended](/devkit/README.md) as a quickstart on how to use devkit for CSI development env. 
 
 #### Requirements
-- go v1.16
+- go v1.17
 - lvm2 packet installed on host machine
 - kubectl v1.16+
 - helm v3
@@ -197,7 +197,8 @@ make deps-docker-tag
 # Retag CSI images and load them to kind
 make kind-tag-images TAG=${CSI_VERSION} REGISTRY=${REGISTRY}
 make kind-load-images TAG=${CSI_VERSION} REGISTRY=${REGISTRY}
-make load-operator-image OPERATOR_VERSION=${CSI_OPERATOR_VERSION} REGISTRY=${REGISTRY}
+make kind-tag-operator-image OPERATOR_VERSION=${CSI_OPERATOR_VERSION} REGISTRY=${REGISTRY}
+make kind-load-operator-image OPERATOR_VERSION=${CSI_OPERATOR_VERSION} REGISTRY=${REGISTRY}
 ```
 
 ##### Install on kind
@@ -262,7 +263,7 @@ specified drive you can set `removed` field as true (See the example above). Thi
 ```
 # Install test app
 cd ${CSI_BAREMETAL_DIR}
-kubectl apply -f test/app/nginx.yaml
+kubectl apply -f tests/app/nginx.yaml
 
 # Check all pods are Running and Ready
 kubectl get pods
@@ -274,6 +275,10 @@ kubectl get pvc
 ## Perform E2E
 
 TODO - add information about CI after https://github.com/dell/csi-baremetal/issues/562
+
+##  Adding new fields to the Kubernetes CRD
+
+Follow CRDs generation article https://github.com/dell/csi-baremetal/blob/master/docs/crds-generation.md#crds-generation-routine
 
 ## Contacts
 If you have any questions, please, open [GitHub issue](https://github.com/dell/csi-baremetal/issues/new) in this repository with the ***question*** label.

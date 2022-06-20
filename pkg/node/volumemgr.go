@@ -289,12 +289,14 @@ func (m *VolumeManager) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 			}
 		}
 	} else {
+		// need to handle volume CR delete request
 		switch volume.Spec.CSIStatus {
 		case apiV1.Created:
 			volume.Spec.CSIStatus = apiV1.Removing
 			ll.Debug("Change volume status from Created to Removing")
 		case apiV1.Removing:
-		case apiV1.Removed:
+		// Failed drive shouldn't be cleaned up - to avoid data loss
+		case apiV1.Removed, apiV1.Failed:
 			// we need to update annotation on related drive CRD
 			// todo can we do polling instead?
 			ll.Infof("Volume %s is removed. Updating related", volume.Name)
@@ -311,16 +313,7 @@ func (m *VolumeManager) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 				ll.Errorf("Unable to obtain drive for volume %s", volume.Name)
 			}
 
-			// remove finalizer
-			if util.ContainsString(volume.ObjectMeta.Finalizers, volumeFinalizer) {
-				volume.ObjectMeta.Finalizers = util.RemoveString(volume.ObjectMeta.Finalizers, volumeFinalizer)
-				ll.Debug("Remove finalizer for volume")
-				if err := m.k8sClient.UpdateCR(ctx, volume); err != nil {
-					ll.Errorf("Unable to update Volume's finalizers")
-				}
-				return ctrl.Result{}, err
-			}
-			return ctrl.Result{}, nil
+			return m.removeFinalizer(ctx, volume)
 		default:
 			ll.Warnf("Volume wasn't deleted, because it has CSI status %s", volume.Spec.CSIStatus)
 			return ctrl.Result{}, nil
@@ -1110,10 +1103,16 @@ func (m *VolumeManager) createEventsForDriveUpdates(updates *driveUpdates) {
 			m.createEventForDriveStatusChange(
 				updDrive.CurrentState, updDrive.PreviousState.Spec.Status, updDrive.CurrentState.Spec.Status)
 		}
-		if updDrive.CurrentState.Spec.Health != updDrive.PreviousState.Spec.Health {
+		currentHealth := updDrive.CurrentState.Spec.Health
+		if currentHealth != updDrive.PreviousState.Spec.Health {
 			if _, ok := updDrive.CurrentState.Annotations[driveHealthOverrideAnnotation]; ok {
 				m.createEventForDriveHealthOverridden(
-					updDrive.CurrentState, updDrive.PreviousState.Spec.Health, updDrive.CurrentState.Spec.Health)
+					updDrive.CurrentState, updDrive.PreviousState.Spec.Health, currentHealth)
+				// check for missing disk replacement to clear disk missing issue
+				if (currentHealth == apiV1.HealthBad || currentHealth == apiV1.HealthSuspect) &&
+					updDrive.CurrentState.Spec.Status == apiV1.DriveStatusOffline {
+					m.createEventForMissingDriveReplacementInitiated(updDrive.CurrentState)
+				}
 			}
 			m.createEventForDriveHealthChange(
 				updDrive.CurrentState, updDrive.PreviousState.Spec.Health, updDrive.CurrentState.Spec.Health)
@@ -1169,6 +1168,13 @@ func (m *VolumeManager) createEventForDriveHealthOverridden(
 	event := eventing.DriveHealthOverridden
 	m.sendEventForDrive(drive, event,
 		msgTemplate, overriddenHealth, realHealth)
+}
+
+// createEventForMissingDriveReplacementInitiated creates MissingDriveReplacementInitiated with Normal severity
+func (m *VolumeManager) createEventForMissingDriveReplacementInitiated(drive *drivecrd.Drive) {
+	msgTemplate := "Drive replacement process for missing disk initiated."
+	event := eventing.MissingDriveReplacementInitiated
+	m.sendEventForDrive(drive, event, msgTemplate)
 }
 
 func (m *VolumeManager) sendEventForDrive(drive *drivecrd.Drive, event *eventing.EventDescription,
@@ -1402,4 +1408,17 @@ func (m *VolumeManager) SetWbtConfig(conf *wbtconf.WbtConfig) {
 		m.log.Infof("Wbt config changed: %+v", *conf)
 		m.wbtConfig = conf
 	}
+}
+
+// remove volume CR finalizer
+func (m *VolumeManager) removeFinalizer(ctx context.Context, volume *volumecrd.Volume) (ctrl.Result, error) {
+	if util.ContainsString(volume.ObjectMeta.Finalizers, volumeFinalizer) {
+		volume.ObjectMeta.Finalizers = util.RemoveString(volume.ObjectMeta.Finalizers, volumeFinalizer)
+		m.log.Debug("Remove finalizer for volume")
+		if err := m.k8sClient.UpdateCR(ctx, volume); err != nil {
+			m.log.Errorf("Unable to update Volume's finalizers")
+			return ctrl.Result{}, err
+		}
+	}
+	return ctrl.Result{}, nil
 }
